@@ -1,0 +1,10 @@
+name: sonzai
+version: 1.0.0
+description: "Sonzai Mind Layer — persistent memory, personality, mood, relationships"
+hooks:
+  - prefetch
+  - queue_prefetch
+  - sync_turn
+  - on_session_end
+  - on_pre_compress
+  - system_prompt_block

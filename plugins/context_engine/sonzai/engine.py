@@ -152,7 +152,12 @@ class SonzaiContextEngine:
         """
         self.compression_count += 1
 
-        if self._degraded or self._client is None or self._agent_id is None:
+        if (
+            self._degraded
+            or self._client is None
+            or self._agent_id is None
+            or self._user_id is None
+        ):
             return list(messages)
 
         last_user_msg = focus_topic or _last_user_content(messages)

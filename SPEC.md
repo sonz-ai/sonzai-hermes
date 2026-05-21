@@ -229,9 +229,23 @@ level. Users activate with `context: engine: "sonzai"` in Hermes config.
 - Ship `README.md` per plugin with the one-shot install + manual config, mirror
   this repo's README structure.
 
-## Open questions to confirm against a live Hermes build
+## Confirmed against the live Hermes build
 
-- Exact import path of the `ContextEngine` ABC (docs say package-level export;
-  confirm module).
-- Whether Hermes passes a per-turn `user_id`/multi-user session shape, or only
-  1:1 CLI — determines how much `parseSessionKey` logic is needed.
+- `MemoryProvider` lives at `agent.memory_provider` — required methods:
+  `name`, `is_available`, `initialize`, `get_tool_schemas`, `handle_tool_call`,
+  `get_config_schema`, `save_config`. Optional hooks: `system_prompt_block`,
+  `prefetch`, `queue_prefetch`, `sync_turn`, `on_session_end`,
+  `on_pre_compress`, `on_memory_write`, `shutdown`.
+- `ContextEngine` lives at `agent.context_engine` — required methods:
+  `name`, `update_from_response(usage)`, `should_compress(prompt_tokens=None)`,
+  `compress(messages, current_tokens=None, focus_topic=None)`. Required
+  attributes: `last_prompt_tokens`, `last_completion_tokens`, `last_total_tokens`,
+  `threshold_tokens`, `context_length`, `compression_count`. Optional:
+  `on_session_start`, `on_session_end`, `on_session_reset`, `update_model`,
+  `get_tool_schemas`, `handle_tool_call`, `get_status`.
+- Plugin entry point for both: `def register(ctx) -> None` calling
+  `ctx.register_memory_provider(...)` / `ctx.register_context_engine(...)`.
+- Hermes currently surfaces `session_id` as the multi-user discriminant.
+  The `user:<handle>/...` prefix in `resolve_user_id` is the agreed wire
+  format for downstream transports; 1:1 CLI sessions still fall back to
+  `default_user_id`.

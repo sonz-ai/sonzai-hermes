@@ -11,10 +11,23 @@ if TYPE_CHECKING:
 
 
 def build_client(config: "SonzaiConfig") -> "Sonzai":
-    """Return a configured ``Sonzai`` client. Raises if ``api_key`` is unset."""
-    raise NotImplementedError("Implement per SPEC.md §SDK surface — Task 4 in PLAN.md.")
+    """Return a configured ``Sonzai`` client. Raises ``ValueError`` if ``api_key`` is unset."""
+    if not config.api_key:
+        raise ValueError(
+            "api_key is required; set SONZAI_API_KEY in the environment "
+            "or run `hermes sonzai setup`."
+        )
+
+    from sonzai import Sonzai
+
+    return Sonzai(api_key=config.api_key, base_url=config.base_url)
 
 
 def close_client(client: "Sonzai | None") -> None:
-    """Best-effort close. Never raises."""
-    raise NotImplementedError("Implement per SPEC.md §SDK surface — Task 4 in PLAN.md.")
+    """Best-effort close. Never raises into Hermes."""
+    if client is None:
+        return
+    try:
+        client.close()
+    except Exception:
+        pass

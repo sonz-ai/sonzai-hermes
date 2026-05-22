@@ -16,23 +16,35 @@ Both talk to Sonzai through the official `sonzai` Python SDK — never hand-roll
 
 ## Status
 
-**v0 — scaffold + spec.** Directory layout, plugin manifests, class skeletons,
-and the full design doc are in. Live integration to fill in next; see
-[`PLAN.md`](./PLAN.md) for the task-by-task implementation plan.
+**Working.** Both plugins implement the live Hermes ABCs
+(`agent.memory_provider.MemoryProvider`, `agent.context_engine.ContextEngine`),
+discover end-to-end through Hermes' own loader, and pass live integration
+tests against the Sonzai API.
+
+Verification layers (see [`scripts/README.md`](./scripts/README.md)):
+
+| Script | What it proves | Network? |
+|---|---|---|
+| `verify_abc_parity.py`     | Every abstract method + required attr matches the live ABC | no |
+| `verify_lifecycle.py`      | Both plugins drive cleanly through the full Hermes lifecycle (mocked SDK) | no |
+| `verify_hermes_discovery.py` | Hermes' own loader finds + instantiates both plugins from their install paths | no |
+| `pytest tests/`            | 82 unit tests | no |
+| `pytest -m integration`    | 2 live tests against the real Sonzai API | yes |
 
 The contract lives in [`SPEC.md`](./SPEC.md). Read it before changing any
 public method on either plugin.
 
 ---
 
-## Install (once implemented)
+## Install
 
 Requires Python 3.11+ and a Sonzai API key (`https://sonz.ai`).
 
 ```bash
 pip install sonzai-hermes
 export SONZAI_API_KEY=sk_...
-hermes sonzai setup            # interactive wizard, one-time
+sonzai-hermes install            # stages both plugins into Hermes
+sonzai-hermes setup              # interactive wizard, one-time
 ```
 
 Then in your Hermes profile (`~/.hermes/config.yaml`):
@@ -43,6 +55,24 @@ memory:
 context:
   engine: sonzai
 ```
+
+### What `sonzai-hermes install` does
+
+Two plugins, two discovery paths — Hermes uses different rules for each:
+
+| Plugin | Destination | Why |
+|---|---|---|
+| Memory provider | `$HERMES_HOME/plugins/sonzai/` | Hermes' supported user-install path for memory providers. |
+| Context engine | `<hermes-install>/plugins/context_engine/sonzai/` | Hermes' loader scans **only its bundled tree** for engines — there is no user-install path today. |
+
+The CLI is idempotent: re-run safely after `pip install --upgrade hermes-agent` (the upgrade overwrites the bundled tree, so the context engine drop needs re-staging).
+
+Flags:
+- `--memory-only` / `--engine-only` — install one without the other
+- `--symlink` — symlink instead of copy (best for dev/editable installs)
+- `--hermes-home`, `--hermes-src` — override auto-detected locations
+- `sonzai-hermes status` shows what's currently staged
+- `sonzai-hermes uninstall` reverses both
 
 ---
 

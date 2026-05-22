@@ -1,6 +1,6 @@
 # Verification scripts
 
-Three layers of audit, cheapest first. Run from the repo root.
+Four layers of audit, cheapest first. Run from the repo root.
 
 ## 1. ABC parity (no network, no Sonzai key)
 
@@ -37,7 +37,27 @@ Sonzai SDK fully mocked. Asserts:
 
 Exits non-zero on any failure. ~2 seconds.
 
-## 3. Live integration tests (needs SONZAI_API_KEY)
+## 3. Hermes discovery end-to-end (no network, no Sonzai key)
+
+```bash
+python3 scripts/verify_hermes_discovery.py
+```
+
+Stages our memory plugin into a temp `$HERMES_HOME/plugins/sonzai/`,
+stages the context engine into Hermes' bundled
+`plugins/context_engine/sonzai/`, then calls Hermes' OWN
+`discover_memory_providers` / `discover_context_engines` /
+`load_memory_provider` / `load_context_engine` to confirm they:
+
+- find our plugin by name,
+- successfully run `register(ctx)`,
+- return instances that pass `isinstance(plugin, MemoryProvider)` and
+  `isinstance(engine, ContextEngine)`.
+
+Cleans up the bundled-tree mutation when done. This is the strongest
+offline proof that the install path actually works.
+
+## 4. Live integration tests (needs SONZAI_API_KEY)
 
 ```bash
 set -a && source /path/to/.env && set +a
@@ -59,8 +79,9 @@ Requires `pytest-timeout` (`pip install pytest-timeout`).
 ```bash
 python3 scripts/verify_abc_parity.py && \
 python3 scripts/verify_lifecycle.py && \
+python3 scripts/verify_hermes_discovery.py && \
 python3 -m pytest tests/ && \
 python3 -m ruff check sonzai_common plugins tests scripts
 ```
 
-All four must pass.
+All five must pass.

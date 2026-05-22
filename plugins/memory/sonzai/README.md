@@ -8,7 +8,8 @@ lifecycle through Sonzai.
 ```bash
 pip install sonzai-hermes
 export SONZAI_API_KEY=sk_...
-hermes sonzai setup
+sonzai-hermes install --memory-only     # drop into $HERMES_HOME/plugins/sonzai/
+sonzai-hermes setup
 ```
 
 Then in `~/.hermes/config.yaml`:
@@ -17,6 +18,11 @@ Then in `~/.hermes/config.yaml`:
 memory:
   provider: sonzai
 ```
+
+The CLI installer copies (or `--symlink`s) this plugin directory into
+`$HERMES_HOME/plugins/sonzai/`. That's the path Hermes' loader scans for
+user-installed memory providers; the type is auto-detected from the
+`register_memory_provider` reference in `__init__.py`.
 
 ## What it does
 

@@ -36,14 +36,22 @@ Homepage = "https://sonz.ai"
 Source = "https://github.com/sonz-ai/sonzai-hermes"
 Hermes = "https://hermes-agent.nousresearch.com"
 
+[project.scripts]
+# After `pip install sonzai-hermes`, this command stages our plugin
+# directories into the locations Hermes' loader actually scans.
+sonzai-hermes = "sonzai_hermes_cli:main"
+
 [tool.hatch.build.targets.wheel]
 packages = ["sonzai_common"]
 
 # The two plugin packages live under the same leaf name (``sonzai``) but
 # at different nested paths. ``packages =`` would collapse both into a
 # single ``sonzai/`` and collide; ``force-include`` keeps the full path.
+# Also force-include the stand-alone CLI module that ``sonzai-hermes``
+# resolves to.
 [tool.hatch.build.targets.wheel.force-include]
 "plugins" = "plugins"
+"sonzai_hermes_cli.py" = "sonzai_hermes_cli.py"
 
 [tool.hatch.build.targets.sdist]
 include = [

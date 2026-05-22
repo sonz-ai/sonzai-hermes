@@ -8,6 +8,7 @@ consolidation pipeline instead of naive LLM summarisation.
 ```bash
 pip install sonzai-hermes
 export SONZAI_API_KEY=sk_...
+sonzai-hermes install --engine-only     # drops into Hermes' bundled tree
 ```
 
 In `~/.hermes/config.yaml`:
@@ -16,6 +17,14 @@ In `~/.hermes/config.yaml`:
 context:
   engine: sonzai
 ```
+
+**Note on installation:** Hermes' loader scans **only its bundled
+`plugins/context_engine/<name>/` directory** for context engines — there is
+no `$HERMES_HOME` user-install path for engines today (it exists for memory
+providers but not engines). `sonzai-hermes install` handles this for you
+by dropping the plugin into the located Hermes install. Re-run after
+`pip install --upgrade hermes-agent` since the upgrade overwrites the
+bundled tree.
 
 ## How compression works
 

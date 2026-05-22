@@ -4,7 +4,7 @@ Auto-discovered by Hermes via the ``register(ctx)`` hook below.
 See ``../../../SPEC.md`` §Plugin 1 — Memory Provider for the contract.
 """
 
-from plugins.memory.sonzai.provider import SonzaiMemoryProvider
+from .provider import SonzaiMemoryProvider
 
 __all__ = ["SonzaiMemoryProvider", "register"]
 

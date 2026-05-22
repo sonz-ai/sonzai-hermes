@@ -25,6 +25,36 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
 
 
+def _load_our_class(plugin_subpath: str, class_name: str):
+    """Load a class from one of our plugin packages by file path.
+
+    We use a dotted module name that matches the on-disk path
+    (``plugins.memory.sonzai``) so that ``unittest.mock.patch`` targets like
+    ``"plugins.memory.sonzai.provider.build_client"`` still resolve. This
+    relies on Hermes NOT being on ``sys.path`` for this harness — the
+    lifecycle test is plugin-side only and never imports Hermes code.
+    """
+    import importlib.util
+
+    init_file = REPO_ROOT / plugin_subpath
+    package_dir = init_file.parent
+    # Recreate the natural dotted path: plugins/memory/sonzai → plugins.memory.sonzai
+    relative = init_file.relative_to(REPO_ROOT).parent
+    module_name = ".".join(relative.parts)
+    if module_name in sys.modules:
+        return getattr(sys.modules[module_name], class_name)
+    spec = importlib.util.spec_from_file_location(
+        module_name,
+        str(init_file),
+        submodule_search_locations=[str(package_dir)],
+    )
+    assert spec is not None and spec.loader is not None
+    mod = importlib.util.module_from_spec(spec)
+    sys.modules[module_name] = mod
+    spec.loader.exec_module(mod)
+    return getattr(mod, class_name)
+
+
 def _make_client() -> MagicMock:
     """A fully mocked Sonzai client wired with sane return shapes."""
     client = MagicMock()
@@ -50,7 +80,7 @@ def _check(label: str, cond: bool, detail: str = "") -> None:
 
 def drive_memory_provider(hermes_home: Path) -> None:
     print("\n[memory provider] full lifecycle:")
-    from plugins.memory.sonzai import SonzaiMemoryProvider
+    SonzaiMemoryProvider = _load_our_class("plugins/memory/sonzai/__init__.py", "SonzaiMemoryProvider")
 
     with patch("plugins.memory.sonzai.provider.build_client") as bc, patch.dict(
         "os.environ", {"SONZAI_API_KEY": "sk_fake"}, clear=False
@@ -159,7 +189,7 @@ def drive_memory_provider(hermes_home: Path) -> None:
 
 def drive_context_engine(hermes_home: Path) -> None:
     print("\n[context engine] full lifecycle:")
-    from plugins.context_engine.sonzai import SonzaiContextEngine
+    SonzaiContextEngine = _load_our_class("plugins/context_engine/sonzai/__init__.py", "SonzaiContextEngine")
 
     with patch("plugins.context_engine.sonzai.engine.build_client") as bc, patch.dict(
         "os.environ", {"SONZAI_API_KEY": "sk_fake"}, clear=False
@@ -236,8 +266,8 @@ def drive_context_engine(hermes_home: Path) -> None:
 def drive_cooperation(hermes_home: Path) -> None:
     """Both plugins active — same agent_id, no double-consolidation."""
     print("\n[cooperation] memory + engine share identity, engine owns consolidate:")
-    from plugins.context_engine.sonzai import SonzaiContextEngine
-    from plugins.memory.sonzai import SonzaiMemoryProvider
+    SonzaiContextEngine = _load_our_class("plugins/context_engine/sonzai/__init__.py", "SonzaiContextEngine")
+    SonzaiMemoryProvider = _load_our_class("plugins/memory/sonzai/__init__.py", "SonzaiMemoryProvider")
 
     with patch("plugins.memory.sonzai.provider.build_client") as mbc, patch(
         "plugins.context_engine.sonzai.engine.build_client"

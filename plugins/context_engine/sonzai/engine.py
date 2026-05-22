@@ -27,20 +27,44 @@ from sonzai_common import (
     resolve_user_id,
 )
 
+# Inherit from the live Hermes ABC when available so isinstance checks
+# in run_agent.py succeed. Fall back to a stub when running outside a
+# Hermes install (tests, packaging).
+try:
+    from agent.context_engine import ContextEngine as _ContextEngineBase  # type: ignore
+except ImportError:  # pragma: no cover
+    class _ContextEngineBase:  # type: ignore[no-redef]
+        """Stub used when Hermes is not on sys.path."""
+
+        name: str = ""
+        last_prompt_tokens: int = 0
+        last_completion_tokens: int = 0
+        last_total_tokens: int = 0
+        threshold_tokens: int = 0
+        context_length: int = 0
+        compression_count: int = 0
+        threshold_percent: float = 0.75
+        protect_first_n: int = 3
+        protect_last_n: int = 6
+
+
 logger = logging.getLogger("sonzai.hermes.context_engine")
 
-# Default recency tail — number of raw turns preserved verbatim after the
-# rebuilt system block. Kept small so the freshly-injected context dominates
-# the rebuilt window.
-DEFAULT_RECENCY_TAIL_N = 6
+# Cap how long ``sessions.end`` polls the server's async ``/status`` endpoint
+# before giving up. Matches the memory provider's bound.
+SESSION_END_POLL_TIMEOUT_S = 15.0
 
 
-class SonzaiContextEngine:
+class SonzaiContextEngine(_ContextEngineBase):
     """Routes Hermes context-engine hooks to Sonzai's consolidation pipeline."""
 
     name = "sonzai"
 
-    DEFAULT_TRIGGER_RATIO = 0.75
+    # Match the ABC's tuneable names so Hermes' run_agent.py can read them
+    # uniformly across engines.
+    threshold_percent: float = 0.75
+    protect_first_n: int = 3
+    protect_last_n: int = 6
 
     def __init__(self) -> None:
         self.last_prompt_tokens = 0
@@ -57,7 +81,6 @@ class SonzaiContextEngine:
         self._session_id: str | None = None
         self._hermes_home: Any = None
         self._degraded = False
-        self._recency_tail_n = DEFAULT_RECENCY_TAIL_N
 
     # ── token bookkeeping ──────────────────────────────────────────────────
 
@@ -74,7 +97,7 @@ class SonzaiContextEngine:
     def update_model(self, model: str, context_length: int, **kwargs: Any) -> None:
         """Set ``context_length``; recompute ``threshold_tokens``."""
         self.context_length = int(context_length)
-        self.threshold_tokens = int(self.context_length * self.DEFAULT_TRIGGER_RATIO)
+        self.threshold_tokens = int(self.context_length * self.threshold_percent)
 
     def should_compress(self, prompt_tokens: int | None = None) -> bool:
         """``True`` when (prompt_tokens or last_prompt_tokens) ≥ threshold."""
@@ -105,13 +128,20 @@ class SonzaiContextEngine:
             self._degraded = True
 
     def on_session_end(self, session_id: str, messages: list[dict[str, Any]]) -> None:
-        """End the Sonzai session and close the client."""
+        """End the Sonzai session and close the client.
+
+        Bounded by ``SESSION_END_POLL_TIMEOUT_S`` — the server's async
+        session-end path returns ``processing_id`` and the SDK polls until
+        the consolidation pipeline finishes. Cap that so Hermes shutdown
+        stays snappy even when consolidation is slow.
+        """
         if not self._degraded and self._client is not None and self._agent_id is not None:
             try:
                 self._client.agents.sessions.end(
                     self._agent_id,
                     user_id=self._user_id,
                     session_id=session_id,
+                    poll_timeout=SESSION_END_POLL_TIMEOUT_S,
                 )
             except Exception as err:
                 logger.warning("sonzai sessions.end failed: %s", err)
@@ -180,7 +210,7 @@ class SonzaiContextEngine:
         rebuilt: list[dict[str, Any]] = []
         if system_block:
             rebuilt.append({"role": "system", "content": system_block})
-        rebuilt.extend(_recency_tail(messages, self._recency_tail_n))
+        rebuilt.extend(_recency_tail(messages, self.protect_last_n))
         return rebuilt
 
     def _compress_via_three_call(
@@ -190,7 +220,7 @@ class SonzaiContextEngine:
     ) -> Any:
         """Default ``process → consolidate → get_context`` chain."""
         assert self._client is not None and self._agent_id is not None and self._user_id is not None
-        slice_for_process = _slice_for_process(messages, self._recency_tail_n)
+        slice_for_process = _slice_for_process(messages, self.protect_last_n)
 
         try:
             if slice_for_process:
@@ -279,15 +309,27 @@ class SonzaiContextEngine:
     # ── status / tools ─────────────────────────────────────────────────────
 
     def get_status(self) -> dict[str, Any]:
-        """Engine health snapshot for ``hermes status``."""
+        """Engine health snapshot for ``hermes status``.
+
+        Matches the field names ``run_agent.py`` expects (see Hermes
+        ``ContextEngine.get_status`` default): ``last_prompt_tokens``,
+        ``threshold_tokens``, ``context_length``, ``usage_percent``,
+        ``compression_count``. Adds Sonzai-specific extras alongside.
+        """
+        usage_percent = (
+            min(100, self.last_prompt_tokens / self.context_length * 100)
+            if self.context_length
+            else 0
+        )
         return {
             "engine": "sonzai",
-            "compressions": self.compression_count,
             "last_prompt_tokens": self.last_prompt_tokens,
             "last_completion_tokens": self.last_completion_tokens,
             "last_total_tokens": self.last_total_tokens,
             "threshold_tokens": self.threshold_tokens,
             "context_length": self.context_length,
+            "usage_percent": usage_percent,
+            "compression_count": self.compression_count,
             "degraded": self._degraded,
         }
 

@@ -260,7 +260,9 @@ def test_get_status_returns_engine_snapshot() -> None:
     e.compression_count = 2
     status = e.get_status()
     assert status["engine"] == "sonzai"
-    assert status["compressions"] == 2
+    # ABC-compatible field names (match Hermes ContextEngine.get_status default)
+    assert status["compression_count"] == 2
     assert status["last_prompt_tokens"] == 100
     assert status["threshold_tokens"] == int(128_000 * 0.75)
     assert status["context_length"] == 128_000
+    assert "usage_percent" in status

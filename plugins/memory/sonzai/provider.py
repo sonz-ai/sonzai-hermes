@@ -34,6 +34,18 @@ from sonzai_common import (
     save_config as common_save_config,
 )
 
+# Inherit from the live Hermes ABC when available so we satisfy
+# ``isinstance`` checks. Fall back to a stub base class when running
+# outside a Hermes install (tests, packaging).
+try:
+    from agent.memory_provider import MemoryProvider as _MemoryProviderBase  # type: ignore
+except ImportError:  # pragma: no cover
+    class _MemoryProviderBase:  # type: ignore[no-redef]
+        """Stub used when Hermes is not on sys.path (tests, packaging)."""
+
+        name: str = ""
+
+
 logger = logging.getLogger("sonzai.hermes.memory")
 
 # Async-prefetch deadline. Picked to match a human-perceptible blink so
@@ -44,8 +56,13 @@ ASYNC_PREFETCH_DEADLINE_S = 0.6
 # join everything in flight on a single short timeout.
 _BG_WORKERS = 4
 
+# Cap how long ``sessions.end`` polls the server's async ``/status`` endpoint
+# before giving up. The server may run session-end consolidation async; we
+# don't want Hermes' shutdown path to block for minutes waiting for it.
+SESSION_END_POLL_TIMEOUT_S = 15.0
 
-class SonzaiMemoryProvider:
+
+class SonzaiMemoryProvider(_MemoryProviderBase):
     """Routes Hermes memory hooks to the Sonzai SDK."""
 
     name = "sonzai"
@@ -191,8 +208,14 @@ class SonzaiMemoryProvider:
 
     # ── recall path ────────────────────────────────────────────────────────
 
-    def prefetch(self, query: str) -> str:
-        """Recall path. Returns formatted ``<sonzai-context>`` block, or ``""``."""
+    def prefetch(self, query: str, *, session_id: str = "") -> str:
+        """Recall path. Returns formatted ``<sonzai-context>`` block, or ``""``.
+
+        ``session_id`` is the per-turn Hermes session id used by transports
+        that multiplex multiple sessions in one process; ignored for 1:1 CLI
+        where the session id matches the one passed to ``initialize``.
+        """
+        del session_id  # we already cached it on initialize()
         if self._degraded or self._client is None or self._agent_id is None:
             return ""
 
@@ -231,8 +254,9 @@ class SonzaiMemoryProvider:
             logger.warning("sonzai async prefetch failed: %s", err)
             return ""
 
-    def queue_prefetch(self, query: str) -> None:
+    def queue_prefetch(self, query: str, *, session_id: str = "") -> None:
         """Warm the cache so the next ``prefetch(query)`` is instant."""
+        del session_id  # cached on initialize()
         if self._degraded or self._executor is None:
             return
 
@@ -259,8 +283,15 @@ class SonzaiMemoryProvider:
 
     # ── persist path ───────────────────────────────────────────────────────
 
-    def sync_turn(self, user_content: str, assistant_content: str) -> None:
+    def sync_turn(
+        self,
+        user_content: str,
+        assistant_content: str,
+        *,
+        session_id: str = "",
+    ) -> None:
         """Per-turn persist. MUST NOT BLOCK — spawns a daemon thread."""
+        del session_id  # cached on initialize()
         if self._degraded or self._client is None or self._agent_id is None:
             return
         if self._executor is None:
@@ -288,7 +319,13 @@ class SonzaiMemoryProvider:
             pass
 
     def on_session_end(self, messages: list[dict[str, Any]]) -> None:
-        """Best-effort session end."""
+        """Best-effort session end.
+
+        Bounded by ``SESSION_END_POLL_TIMEOUT_S`` so a slow async consolidator
+        on the server doesn't block Hermes' shutdown path. The SDK polls the
+        ``/status`` endpoint when the server returns ``processing_id`` for
+        async session-end; we cap that to a sensible CLI-friendly window.
+        """
         if self._degraded or self._client is None or self._agent_id is None:
             return
         try:
@@ -296,22 +333,28 @@ class SonzaiMemoryProvider:
                 self._agent_id,
                 user_id=self._user_id,
                 session_id=self._session_id,
+                poll_timeout=SESSION_END_POLL_TIMEOUT_S,
             )
         except Exception as err:
             logger.warning("sonzai sessions.end failed: %s", err)
 
-    def on_pre_compress(self, messages: list[dict[str, Any]]) -> None:
+    def on_pre_compress(self, messages: list[dict[str, Any]]) -> str:
         """Safety-net flush before window compression.
 
-        Only flushes via ``process()`` — the Context Engine plugin owns
-        ``consolidate()``. Set ``also_consolidate=true`` in the saved
-        config to additionally trigger consolidation when this provider
-        is paired with a non-Sonzai context engine.
+        Per the Hermes ABC, this method may return a string to include in
+        the compression summary prompt so the compressor preserves
+        provider-extracted insights. We return ``""`` because the Sonzai
+        Context Engine plugin owns both fact-extraction (``process``) and
+        consolidation; nothing extra to surface to a fallback compressor.
+
+        If a non-Sonzai context engine is paired with this provider, set
+        ``also_consolidate: true`` in the saved config to additionally
+        trigger ``consolidate()`` here.
         """
         if self._degraded or self._client is None or self._agent_id is None:
-            return
+            return ""
         if not messages:
-            return
+            return ""
         try:
             self._client.agents.process(
                 self._agent_id,
@@ -328,6 +371,8 @@ class SonzaiMemoryProvider:
                 self._client.agents.consolidate(self._agent_id, user_id=self._user_id)
             except Exception as err:
                 logger.warning("sonzai on_pre_compress consolidate failed: %s", err)
+
+        return ""
 
     def _extra_consolidate(self) -> bool:
         """Read the ``also_consolidate`` flag from the saved config file."""
@@ -394,13 +439,18 @@ class SonzaiMemoryProvider:
             },
         ]
 
-    def handle_tool_call(self, name: str, args: dict[str, Any]) -> str:
+    def handle_tool_call(
+        self,
+        tool_name: str,
+        args: dict[str, Any],
+        **_kwargs: Any,
+    ) -> str:
         """Dispatch ``sonzai_memory_*`` tool calls. Returns JSON string."""
         if self._degraded or self._client is None or self._agent_id is None:
             return json.dumps({"error": "sonzai memory unavailable"})
 
         try:
-            if name == "sonzai_memory_search":
+            if tool_name == "sonzai_memory_search":
                 query = str(args.get("query", "")).strip()
                 if not query:
                     return json.dumps({"error": "query is required"})
@@ -411,7 +461,7 @@ class SonzaiMemoryProvider:
                 )
                 return _to_json(result)
 
-            if name == "sonzai_memory_write":
+            if tool_name == "sonzai_memory_write":
                 content = str(args.get("content", "")).strip()
                 if not content:
                     return json.dumps({"error": "content is required"})
@@ -422,9 +472,9 @@ class SonzaiMemoryProvider:
                 )
                 return _to_json(result)
 
-            return json.dumps({"error": f"unknown tool: {name}"})
+            return json.dumps({"error": f"unknown tool: {tool_name}"})
         except Exception as err:
-            logger.warning("sonzai handle_tool_call(%s) failed: %s", name, err)
+            logger.warning("sonzai handle_tool_call(%s) failed: %s", tool_name, err)
             return json.dumps({"error": str(err)})
 
 

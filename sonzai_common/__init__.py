@@ -7,7 +7,7 @@ overrides, agent-id resolution/provisioning, user-id parsing, and the
 Neither plugin imports from the other — they both import from here.
 """
 
-__version__ = "0.1.0"
+__version__ = "1.0.0"
 
 from sonzai_common.client import build_client, close_client
 from sonzai_common.config import (

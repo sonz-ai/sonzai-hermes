@@ -86,28 +86,31 @@ _bump VERSION:
     #!/usr/bin/env bash
     set -euo pipefail
     perl -pi -e 's/^version = "[^"]+"/version = "{{VERSION}}"/' pyproject.toml
-    perl -pi -e 's/^__version__ = "[^"]+"/__version__ = "{{VERSION}}"/' sonzai_common/__init__.py
     echo "bumped to {{VERSION}}"
 
 _build:
     rm -rf dist
     uv build
 
-# Mirror the CI verification — make sure both plugin trees and sonzai_common
-# actually shipped in the wheel before we tag.
+# Make sure both plugin trees and the CLI shipped in the wheel before we tag.
+# Bundled layout: each plugin owns its own ``_common`` subpackage, no
+# top-level shared module — verify both ``_common/__init__.py`` files
+# made it into the wheel.
 _verify-wheel VERSION:
     #!/usr/bin/env bash
     set -euo pipefail
     whl="dist/sonzai_hermes-{{VERSION}}-py3-none-any.whl"
     if [[ ! -f "$whl" ]]; then echo "error: $whl not found" >&2; exit 1; fi
     python3 -m zipfile -l "$whl" | grep -q "plugins/memory/sonzai/provider.py"
+    python3 -m zipfile -l "$whl" | grep -q "plugins/memory/sonzai/_common/__init__.py"
+    python3 -m zipfile -l "$whl" | grep -q "plugins/memory/sonzai/_common/onboarding.py"
     python3 -m zipfile -l "$whl" | grep -q "plugins/context_engine/sonzai/engine.py"
-    python3 -m zipfile -l "$whl" | grep -q "sonzai_common/__init__.py"
+    python3 -m zipfile -l "$whl" | grep -q "plugins/context_engine/sonzai/_common/__init__.py"
     python3 -m zipfile -l "$whl" | grep -q "sonzai_hermes_cli.py"
     echo "✓ wheel contents OK"
 
 _commit VERSION:
-    git add pyproject.toml sonzai_common/__init__.py
+    git add pyproject.toml
     git commit -m "release: v{{VERSION}}"
 
 _publish VERSION:

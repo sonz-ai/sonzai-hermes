@@ -29,6 +29,7 @@ from sonzai_common import (
     close_client,
     format_enriched_context,
     load_config,
+    register_byok_keys_async,
     resolve_agent_id,
     resolve_user_id,
     save_config as common_save_config,
@@ -112,6 +113,13 @@ class SonzaiMemoryProvider(_MemoryProviderBase):
                 user_id=self._user_id,
                 session_id=session_id,
             )
+
+            # BYOK bootstrap — register provider keys we find in env so
+            # Sonzai routes LLM calls through the customer's own provider
+            # account (25% service fee instead of platform-key markup).
+            # Idempotent on the platform side; fired on a daemon thread
+            # so we never block Hermes startup.
+            register_byok_keys_async(self._client, self._config)
         except Exception as err:
             logger.warning("sonzai memory provider degraded: %s", err)
             self._degraded = True

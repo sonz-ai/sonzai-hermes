@@ -31,8 +31,10 @@ from sonzai_common import (
     SonzaiConfig,
     TrialCapReachedError,
     build_client,
+    detect_byok_keys,
     generate_blurb,
     load_config,
+    register_byok_keys,
     request_claim_link,
     request_trial_key,
     resolve_agent_id,
@@ -220,6 +222,42 @@ def run_setup(
     env_file = home / ".env"
     _write_env_key(env_file, "SONZAI_API_KEY", api_key)
     out(f"✓ wrote API key to {env_file} (chmod 600)\n")
+
+    # ── BYOK ──────────────────────────────────────────────────────────────
+    # Detect provider keys already set in the user's env (OPENAI_API_KEY etc.)
+    # and offer to register them with Sonzai. Registered BYOK keys make
+    # Sonzai route LLM calls through the customer's own provider account
+    # (25% service fee vs ~125% platform-key markup).
+    detected = detect_byok_keys()
+    if detected:
+        names = sorted(detected)
+        out(
+            f"\nDetected provider keys in your env: {', '.join(names)}.\n"
+            "Register them with Sonzai so calls route through your own accounts?\n"
+        )
+        choice = prompt("Register BYOK keys? [Y/n] ").strip().lower()
+        if choice in ("", "y", "yes"):
+            try:
+                cfg = SonzaiConfig(
+                    api_key=api_key,
+                    agent_id=agent_id,
+                    agent_name=agent_name,
+                    base_url=base_url,
+                    memory_mode=memory_mode,
+                )
+                client = build_client(cfg)
+                registered = register_byok_keys(client, cfg)
+                client.close()
+                if registered:
+                    for r in registered:
+                        out(f"✓ registered BYOK: {r.provider} (from {r.source_env})\n")
+                else:
+                    out(
+                        "warning: detected keys but none registered (no project found "
+                        "— set SONZAI_PROJECT_ID or create a 'Default' project).\n"
+                    )
+            except Exception as err:
+                out(f"warning: BYOK registration failed: {err}\n")
 
     return 0
 

@@ -23,6 +23,7 @@ from sonzai_common import (
     close_client,
     format_enriched_context,
     load_config,
+    register_byok_keys_async,
     resolve_agent_id,
     resolve_user_id,
 )
@@ -123,6 +124,11 @@ class SonzaiContextEngine(_ContextEngineBase):
                 session_id=session_id,
             )
             self._degraded = False
+
+            # BYOK bootstrap — daemon thread, never blocks. When both plugins
+            # are installed the memory provider also fires this; the platform
+            # PUT is idempotent so the duplicate is harmless.
+            register_byok_keys_async(self._client, self._config)
         except Exception as err:
             logger.warning("sonzai context engine degraded: %s", err)
             self._degraded = True

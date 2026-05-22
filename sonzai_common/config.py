@@ -30,6 +30,7 @@ ENV_OVERRIDES: dict[str, str] = {
     "agent_name": "SONZAI_AGENT_NAME",
     "base_url": "SONZAI_BASE_URL",
     "memory_mode": "SONZAI_MEMORY_MODE",
+    "project_id": "SONZAI_PROJECT_ID",
 }
 
 # Fields that must never be persisted to disk — they live in Hermes' ``.env``.
@@ -45,6 +46,9 @@ class SonzaiConfig:
     default_user_id: str = DEFAULT_USER_ID
     memory_mode: str = DEFAULT_MEMORY_MODE
     context_token_budget: int = DEFAULT_CONTEXT_TOKEN_BUDGET
+    # BYOK project scope — required to register provider keys on the platform.
+    # Auto-resolved (project named "Default" or the only project) when None.
+    project_id: str | None = None
 
 
 def _config_path(hermes_home: str | os.PathLike[str]) -> Path:

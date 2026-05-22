@@ -38,13 +38,24 @@ public method on either plugin.
 
 ## Install
 
-Requires Python 3.11+ and a Sonzai API key (`https://sonz.ai`).
+Requires Python 3.11+. **No Sonzai account required to start** — `setup` will
+provision a 14-day trial on first run via the public `/onboarding/trial`
+endpoint (mirrors `sonzai-openclaw`'s zero-touch onboarding).
 
 ```bash
 pip install sonzai-hermes
-export SONZAI_API_KEY=sk_...
-sonzai-hermes install            # stages both plugins into Hermes
-sonzai-hermes setup              # interactive wizard, one-time
+sonzai-hermes install            # stages both plugins into Hermes' discovery paths
+sonzai-hermes setup              # if no SONZAI_API_KEY: provisions a 14-day trial,
+                                 # opens a browser to the claim URL, writes the
+                                 # key to $HERMES_HOME/.env. Done in ~5 seconds.
+```
+
+Already have an API key? Set `SONZAI_API_KEY` before `setup` and it skips the trial flow.
+
+Convert a trial to a permanent account any time before expiry:
+
+```bash
+sonzai-hermes claim              # prints + opens a fresh claim URL
 ```
 
 Then in your Hermes profile (`~/.hermes/config.yaml`):

@@ -106,7 +106,10 @@ def save_config(values: dict[str, Any], hermes_home: str | os.PathLike[str]) -> 
     for key, value in values.items():
         if key in SECRET_FIELDS:
             continue
-        if key not in valid_keys:
+        # Allow underscore-prefixed metadata keys (e.g. ``_trial``) to pass
+        # through unchanged — mirrors openclaw.json's ``_trial`` convention
+        # for trial expiry + claim URL.
+        if key not in valid_keys and not key.startswith("_"):
             continue
         existing[key] = value
 

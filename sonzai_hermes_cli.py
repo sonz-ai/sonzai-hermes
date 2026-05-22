@@ -29,7 +29,7 @@ import shutil
 import sys
 from pathlib import Path
 
-from plugins.memory.sonzai.cli import run_health, run_setup
+from plugins.memory.sonzai.cli import run_claim, run_health, run_setup
 
 
 def _resolve_hermes_home(arg: str | None) -> Path:
@@ -190,6 +190,13 @@ def cmd_health(args: argparse.Namespace) -> int:
     return run_health(hermes_home=_resolve_hermes_home(args.hermes_home))
 
 
+def cmd_claim(args: argparse.Namespace) -> int:
+    return run_claim(
+        hermes_home=_resolve_hermes_home(args.hermes_home),
+        open_browser=not args.no_open,
+    )
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog="sonzai-hermes",
@@ -228,6 +235,17 @@ def build_parser() -> argparse.ArgumentParser:
 
     health = sub.add_parser("health", help="Hit the Sonzai /health endpoint.")
     health.set_defaults(func=cmd_health)
+
+    claim = sub.add_parser(
+        "claim",
+        help="Print a fresh claim URL to convert your trial into a real account.",
+    )
+    claim.add_argument(
+        "--no-open",
+        action="store_true",
+        help="Skip auto-opening the claim URL in your browser.",
+    )
+    claim.set_defaults(func=cmd_claim)
 
     return p
 

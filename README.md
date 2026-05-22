@@ -58,6 +58,20 @@ Convert a trial to a permanent account any time before expiry:
 sonzai-hermes claim              # prints + opens a fresh claim URL
 ```
 
+### BYOK — bring your own LLM provider keys
+
+If `OPENAI_API_KEY`, `GEMINI_API_KEY` (or `GOOGLE_API_KEY`), `XAI_API_KEY`,
+or `OPENROUTER_API_KEY` are set in your environment, both plugins
+automatically register them with the Sonzai platform on first startup.
+
+Sonzai then routes LLM calls through **your** provider account, charging
+only the 25% service fee instead of the ~125% platform-key markup. The
+PUT is idempotent; subsequent startups are no-ops if nothing changed.
+
+Override per provider with `SONZAI_BYOK_<PROVIDER>_KEY` (takes precedence
+over the standard env var name). Set `SONZAI_PROJECT_ID` if your tenant
+has multiple projects and none is named `Default`.
+
 Then in your Hermes profile (`~/.hermes/config.yaml`):
 
 ```yaml

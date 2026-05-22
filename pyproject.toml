@@ -42,7 +42,10 @@ Hermes = "https://hermes-agent.nousresearch.com"
 sonzai-hermes = "sonzai_hermes_cli:main"
 
 [tool.hatch.build.targets.wheel]
-packages = ["sonzai_common"]
+# No top-level Python packages — each plugin is self-contained under
+# ``plugins/<type>/sonzai/`` with its own ``_common/`` subpackage,
+# matching Hermes' bundled-plugin convention (honcho, hindsight, mem0).
+packages = []
 
 # The two plugin packages live under the same leaf name (``sonzai``) but
 # at different nested paths. ``packages =`` would collapse both into a
@@ -55,7 +58,6 @@ packages = ["sonzai_common"]
 
 [tool.hatch.build.targets.sdist]
 include = [
-    "sonzai_common",
     "plugins",
     "sonzai_hermes_cli.py",
     "tests",

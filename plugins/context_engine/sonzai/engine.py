@@ -17,7 +17,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from sonzai_common import (
+from ._common import (
     SonzaiConfig,
     build_client,
     close_client,

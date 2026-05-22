@@ -285,7 +285,7 @@ def drive_cooperation(hermes_home: Path) -> None:
 
         _check("memory not degraded", m._degraded is False)
         _check("engine not degraded", e._degraded is False)
-        _check("both resolved same agent_id (shared sonzai_common)",
+        _check("both resolved same agent_id (each plugin's own _common, identical logic)",
                m._agent_id == e._agent_id == "agent_test")
 
         # Memory provider's on_pre_compress should NOT call consolidate by default —

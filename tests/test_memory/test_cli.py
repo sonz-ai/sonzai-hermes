@@ -6,7 +6,7 @@ import json
 from unittest.mock import MagicMock, patch
 
 from plugins.memory.sonzai.cli import run_claim, run_health, run_setup
-from sonzai_common import ClaimLinkResult, TrialCapReachedError, TrialResult
+from plugins.memory.sonzai._common import ClaimLinkResult, TrialCapReachedError, TrialResult
 
 # Prompt order in run_setup:
 #   1. Sonzai base URL

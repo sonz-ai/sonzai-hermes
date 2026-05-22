@@ -6,7 +6,7 @@ import json
 from unittest.mock import MagicMock, patch
 
 from plugins.context_engine.sonzai import SonzaiContextEngine
-from sonzai_common import SonzaiConfig
+from plugins.memory.sonzai._common import SonzaiConfig
 
 
 # ─── token tracking ────────────────────────────────────────────────────────

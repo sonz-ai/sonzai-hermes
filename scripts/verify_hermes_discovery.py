@@ -52,9 +52,9 @@ def _augment_sys_path(hermes_home: Path) -> None:
     # hermes_home must be on the env so hermes_constants.get_hermes_home picks it up.
     os.environ["HERMES_HOME"] = str(hermes_home)
     sys.path.insert(0, str(HERMES_SRC))
-    # ``sonzai_common`` lives in our repo and needs to be importable when the
-    # plugin runs — replicate what a pip-install of ``sonzai-hermes`` would
-    # do by adding REPO_ROOT to the path.
+    # Each plugin ships its own self-contained ``_common`` subpackage; no
+    # external top-level package needed. REPO_ROOT goes on sys.path so the
+    # SDK + standard libs resolve normally during plugin exec.
     sys.path.insert(0, str(REPO_ROOT))
 
 

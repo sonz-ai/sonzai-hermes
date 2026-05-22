@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 
-from sonzai_common import SonzaiConfig, load_config, save_config
+from plugins.memory.sonzai._common import SonzaiConfig, load_config, save_config
 
 
 def test_defaults() -> None:

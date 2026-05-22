@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
-from sonzai_common import SonzaiConfig, resolve_agent_id, resolve_user_id
+from plugins.memory.sonzai._common import SonzaiConfig, resolve_agent_id, resolve_user_id
 
 
 def test_resolve_agent_id_uses_configured() -> None:

@@ -24,7 +24,7 @@ import webbrowser
 from pathlib import Path
 from typing import Callable
 
-from sonzai_common import (
+from ._common import (
     DEFAULT_AGENT_NAME,
     DEFAULT_BASE_URL,
     DEFAULT_MEMORY_MODE,

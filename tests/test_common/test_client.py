@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from sonzai_common import SonzaiConfig, build_client, close_client
+from plugins.memory.sonzai._common import SonzaiConfig, build_client, close_client
 
 
 def test_build_client_requires_api_key() -> None:

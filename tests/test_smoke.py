@@ -4,7 +4,7 @@ import importlib
 
 
 def test_sonzai_common_importable():
-    importlib.import_module("sonzai_common")
+    importlib.import_module("plugins.memory.sonzai._common")
 
 
 def test_memory_plugin_importable():

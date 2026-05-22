@@ -23,7 +23,7 @@ from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeou
 from pathlib import Path
 from typing import Any
 
-from sonzai_common import (
+from ._common import (
     SonzaiConfig,
     build_client,
     close_client,

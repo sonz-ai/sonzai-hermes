@@ -8,7 +8,7 @@ from unittest.mock import patch
 
 import pytest
 
-from sonzai_common import (
+from plugins.memory.sonzai._common import (
     ClaimLinkResult,
     TrialCapReachedError,
     TrialResult,
@@ -56,7 +56,7 @@ def test_request_trial_key_success() -> None:
         "trial_expires_at": "2026-06-05T00:00:00Z",
         "claim_url": "https://platform.sonz.ai/onboarding/claim/tok-abc",
     }
-    with patch("sonzai_common.onboarding.urllib.request.urlopen", _fake_urlopen(body=payload)):
+    with patch("plugins.memory.sonzai._common.onboarding.urllib.request.urlopen", _fake_urlopen(body=payload)):
         result = request_trial_key(
             "https://api.sonz.ai",
             agent_name="hermes-agent",
@@ -71,7 +71,7 @@ def test_request_trial_key_success() -> None:
 
 def test_request_trial_key_raises_on_429() -> None:
     with patch(
-        "sonzai_common.onboarding.urllib.request.urlopen",
+        "plugins.memory.sonzai._common.onboarding.urllib.request.urlopen",
         _fake_urlopen(raise_429=True),
     ):
         with pytest.raises(TrialCapReachedError):
@@ -84,7 +84,7 @@ def test_request_trial_key_propagates_other_errors() -> None:
     def boom(req, timeout=None):
         raise HTTPError(req.full_url, 500, "Server Error", {}, io.BytesIO(b'{"error":"boom"}'))
 
-    with patch("sonzai_common.onboarding.urllib.request.urlopen", boom):
+    with patch("plugins.memory.sonzai._common.onboarding.urllib.request.urlopen", boom):
         with pytest.raises(RuntimeError, match="trial issuance failed"):
             request_trial_key("https://api.sonz.ai")
 
@@ -112,7 +112,7 @@ def test_request_claim_link_success() -> None:
 
         return Resp()
 
-    with patch("sonzai_common.onboarding.urllib.request.urlopen", opener):
+    with patch("plugins.memory.sonzai._common.onboarding.urllib.request.urlopen", opener):
         result = request_claim_link("https://api.sonz.ai", "sk_trial_abc")
 
     assert isinstance(result, ClaimLinkResult)

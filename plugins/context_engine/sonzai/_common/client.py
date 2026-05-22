@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from sonzai import Sonzai
 
-    from sonzai_common.config import SonzaiConfig
+    from .config import SonzaiConfig
 
 
 def build_client(config: "SonzaiConfig") -> "Sonzai":

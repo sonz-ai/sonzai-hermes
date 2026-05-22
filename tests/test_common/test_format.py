@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from sonzai_common import format_enriched_context
+from plugins.memory.sonzai._common import format_enriched_context
 
 
 def test_empty_response_returns_empty_string() -> None:

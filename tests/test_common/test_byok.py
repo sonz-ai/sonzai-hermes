@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
-from sonzai_common import (
+from plugins.memory.sonzai._common import (
     BYOK_PROVIDERS,
     SonzaiConfig,
     detect_byok_keys,

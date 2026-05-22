@@ -41,8 +41,7 @@ def _augment_sys_path() -> None:
         )
         sys.exit(2)
     sys.path.insert(0, str(HERMES_SRC))
-    # REPO_ROOT is still needed so ``sonzai_common`` (a top-level package
-    # outside ``plugins/``) is importable from inside our plugin code.
+    # REPO_ROOT lets us load each plugin's __init__.py by file path.
     sys.path.append(str(REPO_ROOT))
 
 

@@ -34,7 +34,13 @@ See [`SPEC.md`](../../../SPEC.md#shared-config) — same keys for both plugins.
 
 Memory mode:
 - `sync` — `prefetch` blocks for completeness (default)
-- `async` — `prefetch` races a short deadline; returns what's ready
+- `async` — `prefetch` races a short (0.6 s) deadline; returns what's ready
+
+Opt-in keys (written to `<hermes_home>/sonzai.json`):
+- `also_consolidate: true` — also call `consolidate()` in `on_pre_compress`.
+  Enable when pairing this provider with a **non-Sonzai** context engine; the
+  Sonzai context engine plugin already owns consolidation, so leave this off
+  when both plugins are installed.
 
 ## Contract
 

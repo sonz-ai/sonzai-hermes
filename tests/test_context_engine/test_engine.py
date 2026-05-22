@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from unittest.mock import MagicMock, patch
 
 from plugins.context_engine.sonzai import SonzaiContextEngine
@@ -193,6 +194,44 @@ def test_compress_focus_topic_passed_to_get_context() -> None:
     e.compress([{"role": "user", "content": "old"}], focus_topic="travel-plans")
     kwargs = client.agents.get_context.call_args.kwargs
     assert kwargs["query"] == "travel-plans"
+
+
+def test_compress_via_session_boundary_when_opted_in(hermes_home, clean_env) -> None:
+    (hermes_home / "sonzai.json").write_text(
+        json.dumps({"compress_via_session_boundary": True})
+    )
+    e = SonzaiContextEngine()
+    e._hermes_home = str(hermes_home)
+    client = _attach_client(e)
+    messages = [{"role": "user", "content": "hello"}]
+    out = e.compress(messages)
+
+    # Should call sessions.end + sessions.start + get_context — NOT process/consolidate.
+    names = [
+        c[0]
+        for c in client.agents.mock_calls
+        if c[0] in {"process", "consolidate", "get_context", "sessions.end", "sessions.start"}
+    ]
+    assert names == ["sessions.end", "sessions.start", "get_context"]
+    # wait=True forced on the end call
+    end_kwargs = client.agents.sessions.end.call_args.kwargs
+    assert end_kwargs["wait"] is True
+    # session rotates so next get_context targets the fresh session
+    assert e._session_id != "sess"
+    # still produces a system + tail
+    assert out[0]["role"] == "system"
+
+
+def test_compress_via_session_boundary_default_off() -> None:
+    """Without the opt-in flag, the three-call path runs."""
+    e = SonzaiContextEngine()
+    client = _attach_client(e)
+    # 10 messages so the recency-tail (6) leaves a slice to process.
+    e.compress([{"role": "user", "content": f"m{i}"} for i in range(10)])
+    names = [c[0] for c in client.agents.mock_calls if c[0] in {"process", "consolidate", "get_context", "sessions.end"}]
+    assert "sessions.end" not in names
+    assert "process" in names
+    assert "consolidate" in names
 
 
 def test_compress_uses_last_user_msg_as_query_default() -> None:

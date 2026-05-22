@@ -30,9 +30,11 @@ Triggered when `prompt_tokens ≥ threshold_tokens` (default `0.75 × context_le
    enriched-context block (capped to `context_token_budget`), plus the last N
    raw turns verbatim (recency tail).
 
-All three RPCs are **synchronous**. The alternative one-call path
-(`sessions.end(wait=True) → sessions.start(new) → get_context`) is supported
-for deployments preferring session-boundary semantics.
+All three RPCs are **synchronous**. The alternative path
+(`sessions.end(wait=True) → sessions.start(<rotated>) → get_context`) is
+opt-in via `compress_via_session_boundary: true` in
+`<hermes_home>/sonzai.json` — heavier, but uses the server's session-boundary
+semantics for tenants that prefer it.
 
 ## Pairs with
 

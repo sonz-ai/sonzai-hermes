@@ -37,10 +37,24 @@ Source = "https://github.com/sonz-ai/sonzai-hermes"
 Hermes = "https://hermes-agent.nousresearch.com"
 
 [tool.hatch.build.targets.wheel]
-packages = [
+packages = ["sonzai_common"]
+
+# The two plugin packages live under the same leaf name (``sonzai``) but
+# at different nested paths. ``packages =`` would collapse both into a
+# single ``sonzai/`` and collide; ``force-include`` keeps the full path.
+[tool.hatch.build.targets.wheel.force-include]
+"plugins" = "plugins"
+
+[tool.hatch.build.targets.sdist]
+include = [
     "sonzai_common",
-    "plugins/memory/sonzai",
-    "plugins/context_engine/sonzai",
+    "plugins",
+    "tests",
+    "README.md",
+    "SPEC.md",
+    "PLAN.md",
+    "LICENSE",
+    "pyproject.toml",
 ]
 
 [tool.ruff]
@@ -49,3 +63,9 @@ target-version = "py311"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# Skip integration tests by default — they hit a live Sonzai tenant.
+# Run them explicitly with `pytest -m integration`.
+addopts = "-m 'not integration'"
+markers = [
+    "integration: end-to-end tests that hit a live Sonzai API (requires SONZAI_API_KEY)",
+]

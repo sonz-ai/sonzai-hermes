@@ -138,6 +138,7 @@ class SonzaiContextEngine:
     ) -> list[dict[str, Any]]:
         """Three sync RPCs, then rebuild.
 
+        Default path:
         (1) ``process(messages_slice)`` extract in-flight facts.
         (2) ``consolidate()`` fold them into canonical memory.
         (3) ``get_context(query=focus_topic or last_user_msg)`` pull
@@ -146,10 +147,16 @@ class SonzaiContextEngine:
             block, then the last N raw turns verbatim.
         (5) ``compression_count += 1``.
 
+        Alternative one-call path (opt-in via ``compress_via_session_boundary``
+        in the saved config): ``sessions.end(wait=True)`` →
+        ``sessions.start(<rotated>)`` → ``get_context``. Heavier, but uses
+        the server's session-boundary semantics for tenants that prefer it.
+
         Always returns a valid OpenAI-format ``list[{"role","content"}]``.
         If Sonzai is unavailable, returns ``messages`` unchanged — Hermes
         will fall back to its own compaction.
         """
+        del current_tokens  # informational; threshold logic lives in should_compress
         self.compression_count += 1
 
         if (
@@ -161,9 +168,30 @@ class SonzaiContextEngine:
             return list(messages)
 
         last_user_msg = focus_topic or _last_user_content(messages)
+
+        if self._compress_via_session_boundary():
+            context = self._compress_via_boundary(messages, last_user_msg)
+        else:
+            context = self._compress_via_three_call(messages, last_user_msg)
+
+        budget = self._config.context_token_budget if self._config else 2000
+        system_block = format_enriched_context(context, budget)
+
+        rebuilt: list[dict[str, Any]] = []
+        if system_block:
+            rebuilt.append({"role": "system", "content": system_block})
+        rebuilt.extend(_recency_tail(messages, self._recency_tail_n))
+        return rebuilt
+
+    def _compress_via_three_call(
+        self,
+        messages: list[dict[str, Any]],
+        last_user_msg: str | None,
+    ) -> Any:
+        """Default ``process → consolidate → get_context`` chain."""
+        assert self._client is not None and self._agent_id is not None and self._user_id is not None
         slice_for_process = _slice_for_process(messages, self._recency_tail_n)
 
-        # (1) process — extract facts from the about-to-discard window.
         try:
             if slice_for_process:
                 self._client.agents.process(
@@ -175,15 +203,13 @@ class SonzaiContextEngine:
         except Exception as err:
             logger.warning("sonzai compress.process failed: %s", err)
 
-        # (2) consolidate.
         try:
             self._client.agents.consolidate(self._agent_id, user_id=self._user_id)
         except Exception as err:
             logger.warning("sonzai compress.consolidate failed: %s", err)
 
-        # (3) get_context — pull the freshly-consolidated state.
         try:
-            context = self._client.agents.get_context(
+            return self._client.agents.get_context(
                 self._agent_id,
                 user_id=self._user_id,
                 session_id=self._session_id,
@@ -191,17 +217,64 @@ class SonzaiContextEngine:
             )
         except Exception as err:
             logger.warning("sonzai compress.get_context failed: %s", err)
-            context = None
+            return None
 
-        budget = self._config.context_token_budget if self._config else 2000
-        system_block = format_enriched_context(context, budget)
+    def _compress_via_boundary(
+        self,
+        messages: list[dict[str, Any]],
+        last_user_msg: str | None,
+    ) -> Any:
+        """Alternative ``sessions.end(wait=True) → sessions.start(new) → get_context``."""
+        assert self._client is not None and self._agent_id is not None and self._user_id is not None
+        old_session = self._session_id
 
-        # (4) Rebuild: system + recency tail.
-        rebuilt: list[dict[str, Any]] = []
-        if system_block:
-            rebuilt.append({"role": "system", "content": system_block})
-        rebuilt.extend(_recency_tail(messages, self._recency_tail_n))
-        return rebuilt
+        try:
+            self._client.agents.sessions.end(
+                self._agent_id,
+                user_id=self._user_id,
+                session_id=old_session,
+                messages=list(messages),
+                wait=True,
+            )
+        except Exception as err:
+            logger.warning("sonzai compress.sessions.end failed: %s", err)
+
+        new_session = f"{old_session or 'session'}-c{self.compression_count}"
+        try:
+            self._client.agents.sessions.start(
+                self._agent_id,
+                user_id=self._user_id,
+                session_id=new_session,
+            )
+            self._session_id = new_session
+        except Exception as err:
+            logger.warning("sonzai compress.sessions.start failed: %s", err)
+
+        try:
+            return self._client.agents.get_context(
+                self._agent_id,
+                user_id=self._user_id,
+                session_id=self._session_id,
+                query=last_user_msg or "",
+            )
+        except Exception as err:
+            logger.warning("sonzai compress.get_context failed: %s", err)
+            return None
+
+    def _compress_via_session_boundary(self) -> bool:
+        """Read the opt-in flag from the saved config file."""
+        if not self._hermes_home:
+            return False
+        try:
+            import json
+            from pathlib import Path
+
+            path = Path(self._hermes_home) / "sonzai.json"
+            if not path.exists():
+                return False
+            return bool(json.loads(path.read_text()).get("compress_via_session_boundary", False))
+        except Exception:
+            return False
 
     # ── status / tools ─────────────────────────────────────────────────────
 
@@ -221,7 +294,7 @@ class SonzaiContextEngine:
     def get_tool_schemas(self) -> list[dict[str, Any]]:
         return []
 
-    def handle_tool_call(self, name: str, args: dict[str, Any], **kwargs: Any) -> str:
+    def handle_tool_call(self, _name: str, _args: dict[str, Any], **_kwargs: Any) -> str:
         return ""
 
 
